@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recrutamento - Facção China</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <a href="/" class="logo">CHINA</a>
+            <nav>
+                <a href="/">Início</a>
+                <a href="/login.html">Login</a>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <div class="form-container">
+            <h2>Formulário de Recrutamento</h2>
+            <p>Sua primeira impressão começa aqui.</p>
+            <form id="recruitment-form">
+                <label for="nickname">Seu nome na cidade (Nickname)</label>
+                <input type="text" id="nickname" name="nickname" required>
+                <label for="gameid">Seu ID no jogo</label>
+                <input type="text" id="gameid" name="gameid" required>
+                <label for="email">Seu Email de Contato</label>
+                <input type="email" id="email" name="email" required>
+                <label for="password">Crie uma Senha para o portal</label>
+                <input type="password" id="password" name="password" required>
+                <button type="submit">Enviar para Análise</button>
+            </form>
+        </div>
+    </main>
+    <footer>
+        <p>Facção China &copy; 2025. Todos os direitos reservados.</p>
+    </footer>
+    <div id="success-modal" class="recruitment-modal">
+        <div class="modal-box">
+            <div class="modal-icon success-icon"><i class="fas fa-check"></i></div>
+            <h2>Enviado com Sucesso!</h2>
+            <p>Sua candidatura foi enviada para a liderança.</p>
+            <button id="modal-ok-button">OK</button>
+        </div>
+    </div>
+    <div id="notification-container"></div>
+    <script src="notifications.js"></script>
+    <script src="recrutamento.js"></script>
+</body>
+</html>

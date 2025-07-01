@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Facção China</title>
+    <link rel="stylesheet" href="dashboard_style.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body class="dashboard-body">
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header"><a href="/" class="logo">CHINA</a></div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-link active" data-target="avisos"><i class="fas fa-bullhorn"></i> <span>Avisos</span></a>
+                <a href="#" class="nav-link" data-target="membros"><i class="fas fa-users"></i> <span>Membros</span></a>
+                <a href="#" class="nav-link" data-target="chat"><i class="fas fa-comments"></i> <span>Mural</span></a>
+                <a href="#" class="nav-link admin-only" data-target="admin"><i class="fas fa-user-shield"></i> <span>Admin</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="/logout" class="logout-link"><i class="fas fa-sign-out-alt"></i> <span>Sair</span></a>
+            </div>
+        </aside>
+        <main class="main-content">
+            <header class="main-header">
+                <h2>Bem-vindo, <span id="member-name">...</span>!</h2>
+            </header>
+            <div id="avisos-section" class="content-panel active">
+                <h3><i class="fas fa-bullhorn"></i> Mural de Avisos</h3>
+                <div id="avisos-grid" class="avisos-grid"></div>
+            </div>
+            <div id="chat-section" class="content-panel">
+                <h3><i class="fas fa-comments"></i> Mural da Facção</h3>
+                <div id="chat-box" class="chat-box"></div>
+                <form id="chat-form" class="chat-form">
+                    <input type="text" id="message-input" placeholder="Digite sua mensagem..." autocomplete="off" required>
+                    <button type="submit"><i class="fas fa-paper-plane"></i> Enviar</button>
+                </form>
+            </div>
+            <div id="membros-section" class="content-panel">
+                <h3><i class="fas fa-users"></i> Membros da Família</h3>
+                <ul id="membros-list" class="membros-list"></ul>
+            </div>
+            <div id="admin-section" class="content-panel admin-only">
+                <h3><i class="fas fa-user-shield"></i> Gerenciar Recrutamentos</h3>
+                <div id="pending-recruits-container" class="avisos-grid"></div>
+            </div>
+        </main>
+    </div>
+    <div id="notification-container"></div>
+    <script src="notifications.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>
