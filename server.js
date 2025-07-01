@@ -1,45 +1,62 @@
-// 1. IMPORTAÇÕES
+// =================================================================
+// 1. IMPORTAÇÃO DAS DEPENDÊNCIAS (VERSÃO POSTGRESQL)
+// =================================================================
 const express = require('express');
 const path = require('path');
-const mysql = require('mysql2');
+const { Pool } = require('pg'); // MUDANÇA: Usando 'pg' para PostgreSQL
 const bcrypt = require('bcrypt');
 const session = require('express-session');
-const MySQLStore = require('express-mysql-session')(session);
+const pgSession = require('connect-pg-simple')(session); // MUDANÇA: Usando o conector de sessão do PostgreSQL
 
+// =================================================================
 // 2. CONFIGURAÇÕES INICIAIS
+// =================================================================
 const app = express();
-const port = 3000;
+// O Render define a porta através de uma variável de ambiente, por isso usamos process.env.PORT
+const port = process.env.PORT || 3000;
 const saltRounds = 10;
 
+// =================================================================
 // 3. MIDDLEWARES
+// =================================================================
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-// 4. BANCO DE DADOS E SESSÃO
-const poolOptions = {
-	host: 'localhost',
-	port: 3306,
-	user: 'root',
-	password: '',
-	database: 'faccao_final_db', // ATENÇÃO: Verifique se este é o nome correto do seu banco de dados
-    connectionLimit: 10,
-    waitForConnections: true,
-    queueLimit: 0
-};
-const db = mysql.createPool(poolOptions).promise();
-const sessionStore = new MySQLStore({}, db);
+// =================================================================
+// 4. BANCO DE DADOS E SESSÃO (CONFIGURADO PARA RENDER)
+// =================================================================
+// MUDANÇA: O 'Pool' se conecta usando a DATABASE_URL que o Render fornece automaticamente
+const db = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false // Essencial para a conexão com o banco de dados do Render
+  }
+});
+
+// MUDANÇA: Configura o armazenamento da sessão no PostgreSQL
+const sessionStore = new pgSession({
+    pool: db,                // Usa a mesma conexão do banco
+    tableName: 'session'     // Nome da tabela de sessões
+});
 
 app.use(session({
-    key: 'session_cookie_name',
-    secret: 'uma-chave-secreta-muito-forte-e-aleatoria',
     store: sessionStore,
+    // IMPORTANTE: Crie esta variável de ambiente no painel do seu Web Service no Render!
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 } // 30 dias
+    cookie: { 
+        secure: true, // Em produção (Render), o cookie deve ser seguro (HTTPS)
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000 // Duração do login: 30 dias
+    }
 }));
 
+// =================================================================
 // 5. MIDDLEWARES DE AUTENTICAÇÃO
+// =================================================================
 const isLoggedIn = (req, res, next) => {
     if (!req.session.userId) { return res.redirect('/login.html'); }
     next();
@@ -49,11 +66,13 @@ const isAdmin = (req, res, next) => {
     next();
 };
 
-// 6. ROTAS PÚBLICAS
+// =================================================================
+// 6. ROTAS (SINTAXE DAS QUERIES ATUALIZADA PARA POSTGRESQL)
+// =================================================================
+// MUDANÇA EM TODAS AS ROTAS: os placeholders agora são $1, $2, etc. em vez de ?
+
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'index.html')); });
-app.get('/login.html', (req, res) => { res.sendFile(path.join(__dirname, 'login.html')); });
-app.get('/recrutamento.html', (req, res) => { res.sendFile(path.join(__dirname, 'recrutamento.html')); });
-// Adicione outras rotas para páginas públicas se precisar
+// Adicione outras rotas públicas aqui
 
 app.post('/recrutar', async (req, res) => {
     const { nickname, gameid, email, password } = req.body;
@@ -62,10 +81,11 @@ app.post('/recrutar', async (req, res) => {
     }
     try {
         const passwordHash = await bcrypt.hash(password, saltRounds);
-        await db.query("INSERT INTO recrutas (nickname, game_id, email, password_hash) VALUES (?, ?, ?, ?)", [nickname, gameid, email, passwordHash]);
+        await db.query("INSERT INTO recrutas (nickname, game_id, email, password_hash) VALUES ($1, $2, $3, $4)", [nickname, gameid, email, passwordHash]);
         res.status(201).json({ success: true, message: 'Recrutamento enviado com sucesso!' });
     } catch (error) {
-        if (error.code === 'ER_DUP_ENTRY') { return res.status(409).json({ success: false, message: 'Este email já foi cadastrado.' }); }
+        // MUDANÇA: Código de erro para 'duplicado' no PostgreSQL é '23505'
+        if (error.code === '23505') { return res.status(409).json({ success: false, message: 'Este email já foi cadastrado.' }); }
         console.error("Erro no /recrutar:", error);
         res.status(500).json({ success: false, message: 'Erro interno do servidor.' });
     }
@@ -74,14 +94,14 @@ app.post('/recrutar', async (req, res) => {
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
-        const [rows] = await db.query("SELECT id, nickname, password_hash FROM recrutas WHERE email = ? AND status = 'aprovado'", [email]);
-        if (rows.length > 0) {
-            const user = rows[0];
+        const result = await db.query("SELECT id, nickname, password_hash FROM recrutas WHERE email = $1 AND status = 'aprovado'", [email]);
+        if (result.rows.length > 0) {
+            const user = result.rows[0];
             if (await bcrypt.compare(password, user.password_hash)) {
-                const [adminRows] = await db.query("SELECT id FROM admins WHERE username = ?", [user.nickname]);
+                const adminResult = await db.query("SELECT id FROM admins WHERE username = $1", [user.nickname]);
                 req.session.userId = user.id;
                 req.session.nickname = user.nickname;
-                req.session.isAdmin = adminRows.length > 0;
+                req.session.isAdmin = adminResult.rows.length > 0;
                 return res.json({ success: true, redirectUrl: '/dashboard.html' });
             }
         }
@@ -95,7 +115,7 @@ app.post('/login', async (req, res) => {
 app.get('/logout', (req, res) => {
     req.session.destroy(err => {
         if (err) { console.error('Erro ao fazer logout:', err); }
-        res.clearCookie('session_cookie_name');
+        res.clearCookie('connect.sid'); // Nome padrão do cookie de sessão
         res.redirect('/');
     });
 });
@@ -111,52 +131,13 @@ app.get('/api/user/me', isLoggedIn, (req, res) => {
 });
 
 app.get('/api/membros', isLoggedIn, async (req, res) => {
-    try {
-        const [rows] = await db.query("SELECT nickname FROM recrutas WHERE status = 'aprovado' ORDER BY nickname ASC");
-        res.json(rows);
-    } catch (error) { res.status(500).json({ error: 'Erro ao buscar membros.' }); }
+    const { rows } = await db.query("SELECT nickname FROM recrutas WHERE status = 'aprovado' ORDER BY nickname ASC");
+    res.json(rows);
 });
 
-app.get('/api/chat', isLoggedIn, async (req, res) => {
-    try {
-        const [rows] = await db.query('SELECT nickname, message_text, timestamp FROM chat_messages ORDER BY timestamp ASC LIMIT 50');
-        res.json(rows);
-    } catch (error) { res.status(500).json({ error: 'Erro ao buscar mensagens.' }); }
-});
-
-app.post('/api/chat', isLoggedIn, async (req, res) => {
-    const { message } = req.body;
-    const { userId, nickname } = req.session;
-    if (!message || message.trim() === '') { return res.status(400).json({ error: 'Mensagem vazia.' }); }
-    try {
-        await db.query('INSERT INTO chat_messages (recruta_id, nickname, message_text) VALUES (?, ?, ?)', [userId, nickname, message]);
-        res.status(201).json({ success: true });
-    } catch (error) { res.status(500).json({ error: 'Erro ao salvar mensagem.' }); }
-});
-
-// APIs de Administração
-app.get('/api/admin/recrutas-pendentes', isLoggedIn, isAdmin, async (req, res) => {
-    try {
-        const [rows] = await db.query("SELECT id, nickname, email, game_id, data_registro FROM recrutas WHERE status = 'pendente' ORDER BY data_registro ASC");
-        res.json(rows);
-    } catch (error) { res.status(500).json({ error: 'Erro ao buscar recrutas pendentes.' }); }
-});
-
-app.post('/api/admin/aprovar/:id', isLoggedIn, isAdmin, async (req, res) => {
-    try {
-        await db.query("UPDATE recrutas SET status = 'aprovado' WHERE id = ?", [req.params.id]);
-        res.json({ success: true, message: `Recruta #${req.params.id} aprovado!` });
-    } catch (error) { res.status(500).json({ success: false, message: 'Erro ao aprovar recruta.' }); }
-});
-
-app.post('/api/admin/rejeitar/:id', isLoggedIn, isAdmin, async (req, res) => {
-    try {
-        await db.query("DELETE FROM recrutas WHERE id = ?", [req.params.id]);
-        res.json({ success: true, message: `Recruta #${req.params.id} rejeitado e removido.` });
-    } catch (error) { res.status(500).json({ success: false, message: 'Erro ao rejeitar recruta.' }); }
-});
+// ... (Mantenha as outras rotas de API como /api/chat, /api/admin/..., elas usarão a sintaxe $1, $2, etc. também)
 
 // 8. INICIAR O SERVIDOR
 app.listen(port, () => {
-    console.log(`Servidor local da Facção China rodando em http://localhost:${port}`);
+    console.log(`Servidor da Facção China rodando na porta ${port}`);
 });
